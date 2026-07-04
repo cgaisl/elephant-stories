@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>นิทาน — Graded Reader</title>
+<style>
+  :root {
+    --bg: #faf7f2;
+    --panel: #ffffff;
+    --ink: #2b2620;
+    --muted: #8a7f70;
+    --accent: #c05621;
+    --accent-soft: #fdeee2;
+    --border: #e8e0d4;
+    --chip-bg: #f3ede3;
+    font-size: 16px;
+  }
+  [data-theme="dark"] {
+    --bg: #1c1916;
+    --panel: #262220;
+    --ink: #ece5da;
+    --muted: #9c9284;
+    --accent: #f0894a;
+    --accent-soft: #3a2a1e;
+    --border: #3a342e;
+    --chip-bg: #322c26;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Sukhumvit Set", "Thonburi", "Noto Sans Thai", -apple-system, sans-serif;
+    min-height: 100vh;
+  }
+  header {
+    display: flex; align-items: center; gap: .75rem; flex-wrap: wrap;
+    padding: .75rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    position: sticky; top: 0; z-index: 5;
+  }
+  header h1 { font-size: 1.15rem; margin-right: auto; font-weight: 600; }
+  button, .btn {
+    font: inherit; color: var(--ink);
+    background: var(--chip-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: .35rem .7rem;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  button.primary {
+    background: var(--accent); color: #fff; border-color: var(--accent);
+    font-weight: 600;
+  }
+  .layout {
+    display: grid; grid-template-columns: 230px 1fr;
+    max-width: 1100px; margin: 0 auto; gap: 1rem; padding: 1rem;
+  }
+  nav#storyList {
+    display: flex; flex-direction: column; gap: 2px;
+    align-self: start;
+    position: sticky; top: 4.2rem;
+    max-height: calc(100vh - 5.5rem); overflow-y: auto;
+  }
+  nav#storyList a {
+    padding: .4rem .6rem; border-radius: 8px;
+    color: var(--ink); text-decoration: none; font-size: .95rem;
+    line-height: 1.35;
+  }
+  nav#storyList a:hover { background: var(--chip-bg); }
+  nav#storyList a.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  main {
+    background: var(--panel);
+    border: 1px solid var(--border); border-radius: 14px;
+    padding: 2rem 2.25rem 2.5rem;
+    min-height: 60vh;
+  }
+  #storyTitle { font-size: 1.5em; margin-bottom: 1.2em; font-weight: 700; }
+  #storyBody { font-size: var(--story-size, 1.6rem); line-height: 2.1; }
+  #storyBody p { margin: 0; }
+  #newWords { margin-top: 2.5rem; border-top: 1px dashed var(--border); padding-top: 1rem; }
+  #newWords h3 { font-size: .85rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .6rem; }
+  .chip {
+    display: inline-block; background: var(--chip-bg);
+    border-radius: 999px; padding: .2rem .7rem; margin: 0 .35rem .45rem 0;
+    font-size: .95rem;
+  }
+  .chip .gloss { color: var(--muted); font-size: .85em; }
+  .card {
+    max-width: 560px; margin: 3rem auto; background: var(--panel);
+    border: 1px solid var(--border); border-radius: 14px; padding: 2rem;
+  }
+  .card h2 { margin-bottom: .75rem; }
+  .card p, .card li { line-height: 1.55; margin-bottom: .6rem; color: var(--ink); }
+  .card ol { padding-left: 1.2rem; margin-bottom: 1rem; }
+  .card label { font-weight: 600; font-size: .9rem; }
+  .card input, .card textarea {
+    font: inherit; width: 100%; padding: .55rem .7rem; margin: .35rem 0 1rem;
+    border: 1px solid var(--border); border-radius: 8px;
+    background: var(--bg); color: var(--ink);
+  }
+  .card textarea { min-height: 7rem; resize: vertical; }
+  .error { color: #c53030; margin-top: .5rem; }
+  dialog {
+    border: 1px solid var(--border); border-radius: 14px;
+    background: var(--panel); color: var(--ink);
+    padding: 1.75rem; max-width: 540px; width: 92vw;
+  }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  .muted { color: var(--muted); font-size: .9rem; }
+  .hidden { display: none !important; }
+  code { background: var(--chip-bg); padding: .1em .35em; border-radius: 4px; font-size: .9em; }
+  @media (max-width: 720px) {
+    .layout { grid-template-columns: 1fr; }
+    nav#storyList {
+      position: static; max-height: none;
+      flex-direction: row; overflow-x: auto; padding-bottom: .3rem;
+    }
+    nav#storyList a { white-space: nowrap; }
+    main { padding: 1.25rem 1.1rem 2rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>นิทาน 🐘</h1>
+  <button id="fontMinus" title="Smaller text">A−</button>
+  <button id="fontPlus" title="Bigger text">A+</button>
+  <button id="spacingToggle" title="Toggle word spacing">เว้นวรรค: on</button>
+  <button id="themeToggle" title="Light/dark">☾</button>
+  <button id="refreshBtn" title="Reload stories from GitHub">↻</button>
+  <button id="settingsBtn" title="Repo &amp; token settings">⚙</button>
+  <button id="requestBtn" class="primary">ขอ นิทาน ใหม่</button>
+</header>
+
+<section id="setupScreen" class="card hidden">
+  <h2>Connect a story repo</h2>
+  <p>This reader renders graded-reader stories straight from a GitHub repo — one with a
+     <code>stories/</code> folder and a <code>VOCABULARY.md</code>
+     (<a href="https://github.com" id="templateLink">create yours from the template in this repo</a>).</p>
+  <label for="repoInput">Repository (owner/name)</label>
+  <input id="repoInput" type="text" placeholder="yourname/my-thai-stories" autocomplete="off" spellcheck="false">
+  <label for="tokenInput">Access token — required for private repos</label>
+  <input id="tokenInput" type="password" placeholder="github_pat_… (leave empty for a public repo)" autocomplete="off">
+  <p class="muted">For a private repo: GitHub → Settings → Developer settings → Fine-grained
+     personal access tokens → new token, scoped to <b>only that repo</b> with
+     <b>Contents: Read-only</b>. Both values are stored only in this browser (localStorage)
+     and sent only to <code>api.github.com</code>.</p>
+  <button id="setupSave" class="primary">Save &amp; load stories</button>
+  <div id="setupError" class="error hidden"></div>
+</section>
+
+<div class="layout hidden" id="readerLayout">
+  <nav id="storyList"></nav>
+  <main>
+    <div id="storyTitle"></div>
+    <div id="storyBody"></div>
+    <div id="newWords" class="hidden"></div>
+  </main>
+</div>
+
+<dialog id="requestDialog">
+  <h2 style="margin-bottom:.75rem">ขอ นิทาน ใหม่</h2>
+  <p class="muted" style="margin-bottom:.5rem">
+    Describe what you'd like — theme, characters, grammar you want to see, "zero new words",
+    "unspaced", or a from-now-on preference. Leave it empty for tutor's choice. This opens a
+    prefilled GitHub issue; submitting the issue starts the story-writing workflow. The story
+    lands here a few minutes later (hit ↻).
+  </p>
+  <textarea id="requestText" placeholder="e.g. a market story, introduce numbers up to 20…"></textarea>
+  <div style="display:flex; gap:.6rem; justify-content:flex-end; margin-top:.75rem">
+    <button id="requestCancel">Cancel</button>
+    <button id="requestGo" class="primary">Open GitHub issue</button>
+  </div>
+</dialog>
+
+<script>
+const $ = id => document.getElementById(id);
+const state = { stories: [], vocab: {}, current: null, spaced: true };
+
+/* ---------- connection config ---------- */
+function repoCfg() { return localStorage.getItem("ghRepo") || ""; }
+function token() { return localStorage.getItem("ghToken") || ""; }
+function apiBase() { return `https://api.github.com/repos/${repoCfg()}/contents`; }
+
+/* ---------- prefs ---------- */
+function loadPrefs() {
+  const size = localStorage.getItem("storySize");
+  if (size) document.documentElement.style.setProperty("--story-size", size);
+  const theme = localStorage.getItem("theme");
+  if (theme) document.documentElement.dataset.theme = theme;
+  else if (matchMedia("(prefers-color-scheme: dark)").matches)
+    document.documentElement.dataset.theme = "dark";
+  state.spaced = localStorage.getItem("spaced") !== "off";
+  updateSpacingBtn();
+}
+function currentSize() {
+  return parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--story-size")) || 1.6;
+}
+$("fontPlus").onclick = () => setSize(Math.min(currentSize() + 0.15, 3));
+$("fontMinus").onclick = () => setSize(Math.max(currentSize() - 0.15, 1));
+function setSize(rem) {
+  const v = rem.toFixed(2) + "rem";
+  document.documentElement.style.setProperty("--story-size", v);
+  localStorage.setItem("storySize", v);
+}
+$("themeToggle").onclick = () => {
+  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  localStorage.setItem("theme", next);
+};
+$("spacingToggle").onclick = () => {
+  state.spaced = !state.spaced;
+  localStorage.setItem("spaced", state.spaced ? "on" : "off");
+  updateSpacingBtn();
+  if (state.current !== null) renderStory(state.current);
+};
+function updateSpacingBtn() {
+  $("spacingToggle").textContent = "เว้นวรรค: " + (state.spaced ? "on" : "off");
+}
+
+/* ---------- GitHub fetch ---------- */
+async function gh(path, raw = true) {
+  const headers = {
+    Accept: raw ? "application/vnd.github.raw+json" : "application/vnd.github+json",
+  };
+  if (token()) headers.Authorization = `Bearer ${token()}`;
+  const res = await fetch(`${apiBase()}/${path}`, { headers });
+  if (res.status === 401 || res.status === 403 || res.status === 404) {
+    throw new Error(`GitHub said ${res.status} for "${repoCfg()}" — check the repo name, and for private repos the token.`);
+  }
+  if (!res.ok) throw new Error(`GitHub error ${res.status}`);
+  return raw ? res.text() : res.json();
+}
+
+async function loadAll() {
+  const listing = await gh("stories", false);
+  const files = listing
+    .filter(f => /^story-\d+\.md$/.test(f.name))
+    .sort((a, b) => num(a.name) - num(b.name));
+  const [texts, vocabMd] = await Promise.all([
+    Promise.all(files.map(f => gh(`stories/${f.name}`))),
+    gh("VOCABULARY.md"),
+  ]);
+  state.stories = files.map((f, i) => {
+    const lines = texts[i].trim().split("\n");
+    return {
+      n: num(f.name),
+      title: lines[0].replace(/^#\s*/, ""),
+      lines: lines.slice(1).map(l => l.trim()).filter(Boolean),
+    };
+  });
+  state.vocab = parseVocab(vocabMd);
+}
+const num = name => parseInt(name.match(/\d+/)[0], 10);
+
+function parseVocab(md) {
+  const map = {};
+  for (const line of md.split("\n")) {
+    const m = line.match(/^\|\s*(\d+)\s*\|(.+)\|\s*$/);
+    if (m) map[parseInt(m[1], 10)] = m[2].trim();
+  }
+  return map;
+}
+
+/* ---------- rendering ---------- */
+function esc(s) {
+  return s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+function unspace(s) {
+  // remove spaces only between Thai characters; spaces around "quotes" survive
+  return s.replace(/(?<=[฀-๿])\s+(?=[฀-๿])/g, "");
+}
+function renderList() {
+  const nav = $("storyList");
+  nav.innerHTML = "";
+  for (const s of state.stories) {
+    const a = document.createElement("a");
+    a.href = "#" + s.n;
+    a.textContent = s.title;
+    a.dataset.n = s.n;
+    a.onclick = e => { e.preventDefault(); renderStory(s.n); history.replaceState(null, "", "#" + s.n); };
+    nav.appendChild(a);
+  }
+}
+function renderStory(n) {
+  const s = state.stories.find(x => x.n === n);
+  if (!s) return;
+  state.current = n;
+  document.querySelectorAll("#storyList a").forEach(a =>
+    a.classList.toggle("active", +a.dataset.n === n));
+  $("storyTitle").textContent = state.spaced ? s.title : unspace(s.title);
+  $("storyBody").innerHTML = s.lines
+    .map(l => `<p>${esc(state.spaced ? l : unspace(l))}</p>`)
+    .join("");
+  renderNewWords(n);
+  $("readerLayout").scrollIntoView();
+}
+function renderNewWords(n) {
+  const box = $("newWords");
+  const row = state.vocab[n];
+  if (!row || row.startsWith("—")) { box.classList.add("hidden"); return; }
+  const entries = row.split(/,\s(?![^(]*\))/);
+  box.innerHTML = "<h3>คำ ใหม่ — new words in this story</h3>" + entries.map(e => {
+    const m = e.match(/^(.+?)\s*\((.+)\)\s*$/);
+    return m
+      ? `<span class="chip">${esc(m[1])} <span class="gloss">${esc(m[2])}</span></span>`
+      : `<span class="chip">${esc(e)}</span>`;
+  }).join("");
+  box.classList.remove("hidden");
+}
+
+/* ---------- request new story ---------- */
+$("requestBtn").onclick = () => $("requestDialog").showModal();
+$("requestCancel").onclick = () => $("requestDialog").close();
+$("requestGo").onclick = () => {
+  const wish = $("requestText").value.trim();
+  const body =
+    "@claude New story request from the reader.\n\n" +
+    (wish ? "Learner's wishes:\n" + wish : "No specific wishes — tutor's choice.");
+  const url = `https://github.com/${repoCfg()}/issues/new` +
+    `?title=${encodeURIComponent("New story request (ขอ นิทาน ใหม่)")}` +
+    `&body=${encodeURIComponent(body)}`;
+  window.open(url, "_blank");
+  $("requestDialog").close();
+};
+
+/* ---------- boot ---------- */
+async function boot() {
+  loadPrefs();
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repoCfg())) return showSetup();
+  try {
+    await loadAll();
+  } catch (e) {
+    return showSetup(e.message);
+  }
+  $("setupScreen").classList.add("hidden");
+  $("readerLayout").classList.remove("hidden");
+  renderList();
+  if (!state.stories.length) {
+    $("storyTitle").textContent = "ยัง ไม่ มี นิทาน";
+    $("storyBody").innerHTML = '<p style="font-size:1rem">No stories yet — use the ขอ นิทาน ใหม่ button to request the first one.</p>';
+    return;
+  }
+  const fromHash = parseInt(location.hash.slice(1), 10);
+  renderStory(state.stories.some(s => s.n === fromHash) ? fromHash : state.stories.at(-1).n);
+}
+function showSetup(err) {
+  $("readerLayout").classList.add("hidden");
+  $("setupScreen").classList.remove("hidden");
+  $("repoInput").value = repoCfg();
+  $("tokenInput").value = token();
+  if (err) { $("setupError").textContent = err; $("setupError").classList.remove("hidden"); }
+}
+$("setupSave").onclick = () => {
+  const repo = $("repoInput").value.trim().replace(/^https:\/\/github\.com\//, "").replace(/\/$/, "");
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) {
+    $("setupError").textContent = 'Repository must look like "owner/name".';
+    $("setupError").classList.remove("hidden");
+    return;
+  }
+  localStorage.setItem("ghRepo", repo);
+  localStorage.setItem("ghToken", $("tokenInput").value.trim());
+  boot();
+};
+$("settingsBtn").onclick = () => showSetup();
+$("refreshBtn").onclick = boot;
+boot();
+</script>
+</body>
+</html>
