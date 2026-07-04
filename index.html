@@ -103,6 +103,10 @@
   }
   .card textarea { min-height: 7rem; resize: vertical; }
   .error { color: #c53030; margin-top: .5rem; }
+  #checkResults { margin-top: 1rem; font-size: .92rem; }
+  #checkResults div { margin-bottom: .35rem; line-height: 1.45; }
+  #checkResults .ok { color: #2f855a; }
+  #checkResults .bad { color: #c53030; }
   dialog {
     border: 1px solid var(--border); border-radius: 14px;
     background: var(--panel); color: var(--ink);
@@ -140,7 +144,8 @@
   <h2>Connect a story repo</h2>
   <p>This reader renders graded-reader stories straight from a GitHub repo — one with a
      <code>stories/</code> folder and a <code>VOCABULARY.md</code>
-     (<a href="https://github.com" id="templateLink">create yours from the template in this repo</a>).</p>
+     (<a href="https://github.com/cgaisl/elephant-stories-template" id="templateLink"
+        target="_blank" rel="noopener">create yours from the template repo</a>).</p>
   <label for="repoInput">Repository (owner/name)</label>
   <input id="repoInput" type="text" placeholder="yourname/my-thai-stories" autocomplete="off" spellcheck="false">
   <label for="tokenInput">Access token — required for private repos</label>
@@ -149,7 +154,11 @@
      personal access tokens → new token, scoped to <b>only that repo</b> with
      <b>Contents: Read-only</b>. Both values are stored only in this browser (localStorage)
      and sent only to <code>api.github.com</code>.</p>
-  <button id="setupSave" class="primary">Save &amp; load stories</button>
+  <div style="display:flex; gap:.6rem; flex-wrap:wrap">
+    <button id="setupSave" class="primary">Save &amp; load stories</button>
+    <button id="setupCheck">Check setup</button>
+  </div>
+  <div id="checkResults" class="hidden"></div>
   <div id="setupError" class="error hidden"></div>
 </section>
 
@@ -229,22 +238,32 @@ async function gh(path, raw = true) {
   };
   if (token()) headers.Authorization = `Bearer ${token()}`;
   const res = await fetch(`${apiBase()}/${path}`, { headers });
-  if (res.status === 401 || res.status === 403 || res.status === 404) {
-    throw new Error(`GitHub said ${res.status} for "${repoCfg()}" — check the repo name, and for private repos the token.`);
+  if (!res.ok) {
+    const err = new Error(
+      res.status === 401 || res.status === 403
+        ? `GitHub said ${res.status} for "${repoCfg()}" — the token is missing, wrong, or expired.`
+        : res.status === 404
+          ? `GitHub can't find "${repoCfg()}/${path}" — check the repo name, and for a private repo that the token can read it.`
+          : `GitHub error ${res.status}`);
+    err.status = res.status;
+    throw err;
   }
-  if (!res.ok) throw new Error(`GitHub error ${res.status}`);
   return raw ? res.text() : res.json();
 }
 
 async function loadAll() {
-  const listing = await gh("stories", false);
+  // VOCABULARY.md doubles as the repo/token validity check
+  const vocabMd = await gh("VOCABULARY.md");
+  let listing = [];
+  try {
+    listing = await gh("stories", false);
+  } catch (e) {
+    if (e.status !== 404) throw e; // no stories/ folder yet is fine
+  }
   const files = listing
     .filter(f => /^story-\d+\.md$/.test(f.name))
     .sort((a, b) => num(a.name) - num(b.name));
-  const [texts, vocabMd] = await Promise.all([
-    Promise.all(files.map(f => gh(`stories/${f.name}`))),
-    gh("VOCABULARY.md"),
-  ]);
+  const texts = await Promise.all(files.map(f => gh(`stories/${f.name}`)));
   state.stories = files.map((f, i) => {
     const lines = texts[i].trim().split("\n");
     return {
@@ -328,9 +347,51 @@ $("requestGo").onclick = () => {
   $("requestDialog").close();
 };
 
+/* ---------- setup check ---------- */
+function normRepo(v) {
+  return v.trim().replace(/^https:\/\/github\.com\//, "").replace(/\/$/, "");
+}
+async function probe(repo, tok, path) {
+  const headers = { Accept: "application/vnd.github+json" };
+  if (tok) headers.Authorization = `Bearer ${tok}`;
+  const res = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, { headers });
+  return res.ok;
+}
+$("setupCheck").onclick = async () => {
+  const repo = normRepo($("repoInput").value);
+  const tok = $("tokenInput").value.trim();
+  const box = $("checkResults");
+  box.classList.remove("hidden");
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) {
+    box.innerHTML = '<div class="bad">✗ Repository must look like "owner/name".</div>';
+    return;
+  }
+  box.textContent = "Checking…";
+  const [vocab, stories, workflow] = await Promise.all([
+    probe(repo, tok, "VOCABULARY.md"),
+    probe(repo, tok, "stories"),
+    probe(repo, tok, ".github/workflows/claude-story.yml"),
+  ]);
+  box.innerHTML = [
+    vocab
+      ? '<div class="ok">✓ Repo readable, VOCABULARY.md found</div>'
+      : '<div class="bad">✗ Can\'t read the repo — check the name and (for a private repo) the token, and that VOCABULARY.md exists</div>',
+    stories
+      ? '<div class="ok">✓ stories/ folder found</div>'
+      : '<div class="bad">✗ No stories/ folder yet — it appears with your first story</div>',
+    workflow
+      ? '<div class="ok">✓ Story-writing workflow installed</div>'
+      : '<div class="bad">✗ Workflow missing (.github/workflows/claude-story.yml) — story requests won\'t be answered; copy it from the template repo</div>',
+    '<div class="muted">Not checkable from here: the Claude GitHub App and the CLAUDE_CODE_OAUTH_TOKEN secret — see the template\'s SETUP.md. They show up when your first @claude issue gets answered under the repo\'s Actions tab.</div>',
+  ].join("");
+};
+
 /* ---------- boot ---------- */
 async function boot() {
   loadPrefs();
+  const urlRepo = normRepo(new URLSearchParams(location.search).get("repo") || "");
+  if (!repoCfg() && /^[\w.-]+\/[\w.-]+$/.test(urlRepo))
+    localStorage.setItem("ghRepo", urlRepo);
   if (!/^[\w.-]+\/[\w.-]+$/.test(repoCfg())) return showSetup();
   try {
     await loadAll();
@@ -356,7 +417,7 @@ function showSetup(err) {
   if (err) { $("setupError").textContent = err; $("setupError").classList.remove("hidden"); }
 }
 $("setupSave").onclick = () => {
-  const repo = $("repoInput").value.trim().replace(/^https:\/\/github\.com\//, "").replace(/\/$/, "");
+  const repo = normRepo($("repoInput").value);
   if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) {
     $("setupError").textContent = 'Repository must look like "owner/name".';
     $("setupError").classList.remove("hidden");
