@@ -95,7 +95,11 @@
   #storyBody { font-size: var(--story-size, 1.6rem); line-height: 2.1; }
   #storyBody p { margin: 0; }
   #newWords { margin-top: 2.5rem; border-top: 1px dashed var(--border); padding-top: 1rem; }
-  #newWords h3 { font-size: .85rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .6rem; }
+  #newWords h3, #deepDive h3 { font-size: .85rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .6rem; }
+  #deepDive { margin-top: 1.75rem; border-top: 1px dashed var(--border); padding-top: 1rem; font-size: 1rem; line-height: 1.7; }
+  #deepDive ul { padding-left: 1.2rem; }
+  #deepDive li { margin-bottom: .6rem; }
+  #deepDive p { margin-bottom: .6rem; }
   .chip {
     display: inline-block; background: var(--chip-bg);
     border-radius: 999px; padding: .2rem .7rem; margin: 0 .35rem .45rem 0;
@@ -186,6 +190,7 @@
     </div>
     <div id="storyBody"></div>
     <div id="newWords" class="hidden"></div>
+    <div id="deepDive" class="hidden"></div>
   </main>
 </div>
 
@@ -288,19 +293,22 @@ async function loadAll() {
   const texts = await Promise.all(files.map(f => gh(`stories/${f.name}`)));
   state.stories = files.map((f, i) => {
     const lines = texts[i].trim().split("\n");
-    let en = "";
+    let en = "", dive = null;
     const body = [];
     for (const raw of lines.slice(1)) {
       const l = raw.trim();
       const m = l.match(/^<!--\s*en:\s*(.*?)\s*-->$/);
       if (m) { en = m[1]; continue; }
-      if (l && !l.startsWith("<!--")) body.push(l);
+      if (/^##\s/.test(l)) { dive = []; continue; } // ## Deep dive — story body ends here
+      if (!l || l.startsWith("<!--")) continue;
+      (dive || body).push(l);
     }
     return {
       n: num(f.name),
       title: lines[0].replace(/^#\s*/, ""),
       en,
       lines: body,
+      dive: dive || [],
     };
   });
   state.vocab = parseVocab(vocabMd);
@@ -352,7 +360,29 @@ function renderStory(n) {
     .map(l => `<p>${esc(state.spaced ? l : unspace(l))}</p>`)
     .join("");
   renderNewWords(n);
+  renderDive(s);
   $("readerLayout").scrollIntoView();
+}
+function inlineMd(s) {
+  return esc(s)
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>");
+}
+function renderDive(s) {
+  const box = $("deepDive");
+  if (!s.dive.length) { box.classList.add("hidden"); return; }
+  let html = "<h3>Deep dive</h3>";
+  let items = [];
+  const flush = () => {
+    if (items.length) { html += "<ul>" + items.map(i => `<li>${i}</li>`).join("") + "</ul>"; items = []; }
+  };
+  for (const l of s.dive) {
+    if (l.startsWith("- ")) items.push(inlineMd(l.slice(2)));
+    else { flush(); html += `<p>${inlineMd(l)}</p>`; }
+  }
+  flush();
+  box.innerHTML = html;
+  box.classList.remove("hidden");
 }
 function renderNewWords(n) {
   const box = $("newWords");
