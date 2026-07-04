@@ -96,10 +96,20 @@
   #storyBody p { margin: 0; }
   #newWords { margin-top: 2.5rem; border-top: 1px dashed var(--border); padding-top: 1rem; }
   #newWords h3, #deepDive h3 { font-size: .85rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .6rem; }
-  #deepDive { margin-top: 1.75rem; border-top: 1px dashed var(--border); padding-top: 1rem; font-size: 1rem; line-height: 1.7; }
-  #deepDive ul { padding-left: 1.2rem; }
+  #deepDive {
+    margin-top: 1.75rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.1rem 1.3rem;
+    font-size: .88rem;
+    line-height: 1.7;
+  }
+  #deepDive ul { padding-left: 1.1rem; }
   #deepDive li { margin-bottom: .6rem; }
+  #deepDive li:last-child { margin-bottom: 0; }
   #deepDive p { margin-bottom: .6rem; }
+  #deepDive strong { color: var(--accent); }
   .chip {
     display: inline-block; background: var(--chip-bg);
     border-radius: 999px; padding: .2rem .7rem; margin: 0 .35rem .45rem 0;
