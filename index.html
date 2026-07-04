@@ -41,6 +41,11 @@
     position: sticky; top: 0; z-index: 5;
   }
   header h1 { font-size: 1.15rem; margin-right: auto; font-weight: 600; }
+  #fontPct {
+    color: var(--muted); font-size: .85rem;
+    min-width: 3em; text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
   button, .btn {
     font: inherit; color: var(--ink);
     background: var(--chip-bg);
@@ -71,13 +76,17 @@
   }
   nav#storyList a:hover { background: var(--chip-bg); }
   nav#storyList a.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  nav#storyList a .en { display: block; font-size: .78rem; color: var(--muted); }
+  nav#storyList a.active .en { color: var(--accent); opacity: .75; }
   main {
     background: var(--panel);
     border: 1px solid var(--border); border-radius: 14px;
     padding: 2rem 2.25rem 2.5rem;
     min-height: 60vh;
   }
-  #storyTitle { font-size: 1.5em; margin-bottom: 1.2em; font-weight: 700; }
+  #storyHeader { margin-bottom: 1.8rem; }
+  #storyTitle { font-size: 1.5em; font-weight: 700; }
+  #storyTitleEn { color: var(--muted); font-size: .95rem; margin-top: .3rem; }
   #storyBody { font-size: var(--story-size, 1.6rem); line-height: 2.1; }
   #storyBody p { margin: 0; }
   #newWords { margin-top: 2.5rem; border-top: 1px dashed var(--border); padding-top: 1rem; }
@@ -132,6 +141,7 @@
 <header>
   <h1>นิทาน 🐘</h1>
   <button id="fontMinus" title="Smaller text">A−</button>
+  <span id="fontPct" title="Story text size (100% = normal)">100%</span>
   <button id="fontPlus" title="Bigger text">A+</button>
   <button id="spacingToggle" title="Toggle word spacing">เว้นวรรค: on</button>
   <button id="themeToggle" title="Light/dark">☾</button>
@@ -165,7 +175,10 @@
 <div class="layout hidden" id="readerLayout">
   <nav id="storyList"></nav>
   <main>
-    <div id="storyTitle"></div>
+    <div id="storyHeader">
+      <div id="storyTitle"></div>
+      <div id="storyTitleEn" class="hidden"></div>
+    </div>
     <div id="storyBody"></div>
     <div id="newWords" class="hidden"></div>
   </main>
@@ -197,8 +210,7 @@ function apiBase() { return `https://api.github.com/repos/${repoCfg()}/contents`
 
 /* ---------- prefs ---------- */
 function loadPrefs() {
-  const size = localStorage.getItem("storySize");
-  if (size) document.documentElement.style.setProperty("--story-size", size);
+  setPct(currentPct());
   const theme = localStorage.getItem("theme");
   if (theme) document.documentElement.dataset.theme = theme;
   else if (matchMedia("(prefers-color-scheme: dark)").matches)
@@ -206,16 +218,21 @@ function loadPrefs() {
   state.spaced = localStorage.getItem("spaced") !== "off";
   updateSpacingBtn();
 }
-function currentSize() {
-  return parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--story-size")) || 1.6;
+const BASE_SIZE = 1.6; // rem — the 100% story size
+function currentPct() {
+  const p = parseInt(localStorage.getItem("storyPct"), 10);
+  if (!isNaN(p)) return p;
+  const legacy = parseFloat(localStorage.getItem("storySize")); // pre-% versions stored rem
+  return legacy ? Math.round(legacy / BASE_SIZE * 10) * 10 : 100;
 }
-$("fontPlus").onclick = () => setSize(Math.min(currentSize() + 0.15, 3));
-$("fontMinus").onclick = () => setSize(Math.max(currentSize() - 0.15, 1));
-function setSize(rem) {
-  const v = rem.toFixed(2) + "rem";
-  document.documentElement.style.setProperty("--story-size", v);
-  localStorage.setItem("storySize", v);
+function setPct(p) {
+  p = Math.max(60, Math.min(190, p));
+  document.documentElement.style.setProperty("--story-size", (BASE_SIZE * p / 100).toFixed(3) + "rem");
+  localStorage.setItem("storyPct", p);
+  $("fontPct").textContent = p + "%";
 }
+$("fontPlus").onclick = () => setPct(currentPct() + 10);
+$("fontMinus").onclick = () => setPct(currentPct() - 10);
 $("themeToggle").onclick = () => {
   const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
   document.documentElement.dataset.theme = next;
@@ -266,10 +283,19 @@ async function loadAll() {
   const texts = await Promise.all(files.map(f => gh(`stories/${f.name}`)));
   state.stories = files.map((f, i) => {
     const lines = texts[i].trim().split("\n");
+    let en = "";
+    const body = [];
+    for (const raw of lines.slice(1)) {
+      const l = raw.trim();
+      const m = l.match(/^<!--\s*en:\s*(.*?)\s*-->$/);
+      if (m) { en = m[1]; continue; }
+      if (l && !l.startsWith("<!--")) body.push(l);
+    }
     return {
       n: num(f.name),
       title: lines[0].replace(/^#\s*/, ""),
-      lines: lines.slice(1).map(l => l.trim()).filter(Boolean),
+      en,
+      lines: body,
     };
   });
   state.vocab = parseVocab(vocabMd);
@@ -296,10 +322,12 @@ function unspace(s) {
 function renderList() {
   const nav = $("storyList");
   nav.innerHTML = "";
-  for (const s of state.stories) {
+  for (const s of [...state.stories].reverse()) { // newest first
     const a = document.createElement("a");
     a.href = "#" + s.n;
-    a.textContent = s.title;
+    const thaiTitle = s.title.replace(/^[๐-๙0-9]+\.\s*/, ""); // Arabic number replaces the Thai numeral in the list
+    a.innerHTML = `<span>${s.n}. ${esc(thaiTitle)}</span>` +
+      (s.en ? `<span class="en">${esc(s.en)}</span>` : "");
     a.dataset.n = s.n;
     a.onclick = e => { e.preventDefault(); renderStory(s.n); history.replaceState(null, "", "#" + s.n); };
     nav.appendChild(a);
@@ -312,6 +340,9 @@ function renderStory(n) {
   document.querySelectorAll("#storyList a").forEach(a =>
     a.classList.toggle("active", +a.dataset.n === n));
   $("storyTitle").textContent = state.spaced ? s.title : unspace(s.title);
+  const enEl = $("storyTitleEn");
+  enEl.textContent = s.en || "";
+  enEl.classList.toggle("hidden", !s.en);
   $("storyBody").innerHTML = s.lines
     .map(l => `<p>${esc(state.spaced ? l : unspace(l))}</p>`)
     .join("");
