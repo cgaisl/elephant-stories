@@ -45,6 +45,7 @@
     position: sticky; top: 0; z-index: 5;
   }
   header h1 { font-size: 1.15rem; margin-right: auto; font-weight: 600; }
+  header h1 .sub { color: var(--muted); font-weight: 400; font-size: .9em; }
   #fontPct {
     color: var(--muted); font-size: .85rem;
     min-width: 3em; text-align: center;
@@ -143,15 +144,15 @@
 <body>
 
 <header>
-  <h1>นิทาน 🐘</h1>
+  <h1>นิทาน <span class="sub">· Stories</span> 🐘</h1>
   <button id="fontMinus" title="Smaller text">A−</button>
   <span id="fontPct" title="Story text size (100% = normal)">100%</span>
   <button id="fontPlus" title="Bigger text">A+</button>
-  <button id="spacingToggle" title="Toggle word spacing">เว้นวรรค: on</button>
+  <button id="spacingToggle" title="Toggle word spacing">Spacing: on</button>
   <button id="themeToggle" title="Light/dark">☾</button>
   <button id="refreshBtn" title="Reload stories from GitHub">↻</button>
   <button id="settingsBtn" title="Repo &amp; token settings">⚙</button>
-  <button id="requestBtn" class="primary">ขอ นิทาน ใหม่</button>
+  <button id="requestBtn" class="primary">Request new story</button>
 </header>
 
 <section id="setupScreen" class="card hidden">
@@ -189,7 +190,7 @@
 </div>
 
 <dialog id="requestDialog">
-  <h2 style="margin-bottom:.75rem">ขอ นิทาน ใหม่</h2>
+  <h2 style="margin-bottom:.75rem">Request a new story</h2>
   <p class="muted" style="margin-bottom:.5rem">
     Describe what you'd like — theme, characters, grammar you want to see, "zero new words",
     "unspaced", or a from-now-on preference. Leave it empty for tutor's choice. This opens a
@@ -249,7 +250,7 @@ $("spacingToggle").onclick = () => {
   if (state.current !== null) renderStory(state.current);
 };
 function updateSpacingBtn() {
-  $("spacingToggle").textContent = "เว้นวรรค: " + (state.spaced ? "on" : "off");
+  $("spacingToggle").textContent = "Spacing: " + (state.spaced ? "on" : "off");
 }
 
 /* ---------- GitHub fetch ---------- */
@@ -376,7 +377,7 @@ $("requestGo").onclick = () => {
     "@claude New story request from the reader.\n\n" +
     (wish ? "Learner's wishes:\n" + wish : "No specific wishes — tutor's choice.");
   const url = `https://github.com/${repoCfg()}/issues/new` +
-    `?title=${encodeURIComponent("New story request (ขอ นิทาน ใหม่)")}` +
+    `?title=${encodeURIComponent("New story request")}` +
     `&body=${encodeURIComponent(body)}`;
   window.open(url, "_blank");
   $("requestDialog").close();
@@ -438,7 +439,7 @@ async function boot() {
   renderList();
   if (!state.stories.length) {
     $("storyTitle").textContent = "ยัง ไม่ มี นิทาน";
-    $("storyBody").innerHTML = '<p style="font-size:1rem">No stories yet — use the ขอ นิทาน ใหม่ button to request the first one.</p>';
+    $("storyBody").innerHTML = '<p style="font-size:1rem">No stories yet — use the Request new story button to request the first one.</p>';
     return;
   }
   const fromHash = parseInt(location.hash.slice(1), 10);
