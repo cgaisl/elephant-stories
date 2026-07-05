@@ -453,7 +453,8 @@ function curRate() {
 function speakFrom(i) {
   const s = curStory();
   if (!SS || !s || i >= s.lines.length) return;
-  SS.cancel();
+  const busy = SS.speaking || SS.pending;
+  if (busy) SS.cancel();
   tts.line = i; tts.playing = true; tts.started = true;
   $("ttsPlay").textContent = "⏸";
   updateTtsUI();
@@ -468,8 +469,16 @@ function speakFrom(i) {
     if (i + 1 < s.lines.length) speakFrom(i + 1);
     else ttsStop(true);
   };
-  u.onerror = () => { if (u === tts.u && tts.playing) ttsStop(false); };
-  SS.speak(u);
+  u.onerror = e => {
+    if (u !== tts.u || !tts.playing) return;
+    ttsStop(false);
+    if (e.error && e.error !== "canceled" && e.error !== "interrupted")
+      $("ttsPos").textContent = "voice failed — try another";
+  };
+  // Chrome silently drops an utterance spoken right after cancel(),
+  // especially for remote voices — give it a beat.
+  if (busy) setTimeout(() => { if (u === tts.u && tts.playing) SS.speak(u); }, 80);
+  else SS.speak(u);
 }
 function ttsStop(reset) {
   tts.playing = false; tts.u = null;
