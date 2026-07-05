@@ -110,6 +110,21 @@
   #deepDive li:last-child { margin-bottom: 0; }
   #deepDive p { margin-bottom: .6rem; }
   #deepDive strong { color: var(--accent); }
+  #ttsBar {
+    margin-bottom: 1.6rem; padding: .55rem .8rem;
+    background: var(--bg);
+    border: 1px solid var(--border); border-radius: 12px;
+  }
+  #ttsControls { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+  #ttsPlay { min-width: 2.4rem; }
+  #ttsSeek { flex: 1; min-width: 90px; accent-color: var(--accent); }
+  #ttsPos { font-size: .85rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  #ttsVoice {
+    font: inherit; font-size: .85rem; max-width: 11rem;
+    background: var(--chip-bg); color: var(--ink);
+    border: 1px solid var(--border); border-radius: 8px; padding: .25rem .4rem;
+  }
+  #storyBody p.speaking { background: var(--accent-soft); border-radius: 6px; }
   .chip {
     display: inline-block; background: var(--chip-bg);
     border-radius: 999px; padding: .2rem .7rem; margin: 0 .35rem .45rem 0;
@@ -197,6 +212,16 @@
     <div id="storyHeader">
       <div id="storyTitle"></div>
       <div id="storyTitleEn" class="hidden"></div>
+    </div>
+    <div id="ttsBar" class="hidden">
+      <div id="ttsControls">
+        <button id="ttsPlay" title="Listen to the story">▶</button>
+        <input id="ttsSeek" type="range" min="0" max="0" value="0" step="1" title="Jump to a line">
+        <span id="ttsPos" class="muted"></span>
+        <button id="ttsRateBtn" title="Speech speed">1×</button>
+        <select id="ttsVoice" title="Thai voice"></select>
+      </div>
+      <span id="ttsNoVoice" class="muted hidden">No Thai voice on this device — install one in your system's speech settings to listen.</span>
     </div>
     <div id="storyBody"></div>
     <div id="newWords" class="hidden"></div>
@@ -367,10 +392,11 @@ function renderStory(n) {
   enEl.textContent = s.en || "";
   enEl.classList.toggle("hidden", !s.en);
   $("storyBody").innerHTML = s.lines
-    .map(l => `<p>${esc(state.spaced ? l : unspace(l))}</p>`)
+    .map((l, i) => `<p data-line="${i}">${esc(state.spaced ? l : unspace(l))}</p>`)
     .join("");
   renderNewWords(n);
   renderDive(s);
+  setupTts(s);
   $("readerLayout").scrollIntoView();
 }
 function inlineMd(s) {
@@ -407,6 +433,98 @@ function renderNewWords(n) {
   }).join("");
   box.classList.remove("hidden");
 }
+
+/* ---------- text-to-speech (per-line, seekable) ---------- */
+const SS = window.speechSynthesis || null;
+const tts = { line: 0, playing: false, started: false, u: null };
+const RATES = [0.7, 0.85, 1, 1.2];
+
+function curStory() { return state.stories.find(x => x.n === state.current); }
+function thaiVoices() { return SS ? SS.getVoices().filter(v => /^th/i.test(v.lang)) : []; }
+function currentVoice() {
+  const vs = thaiVoices();
+  const want = localStorage.getItem("ttsVoice");
+  return vs.find(v => v.voiceURI === want) || vs[0] || null;
+}
+function curRate() {
+  const r = parseFloat(localStorage.getItem("ttsRate"));
+  return RATES.includes(r) ? r : 1;
+}
+function speakFrom(i) {
+  const s = curStory();
+  if (!SS || !s || i >= s.lines.length) return;
+  SS.cancel();
+  tts.line = i; tts.playing = true; tts.started = true;
+  $("ttsPlay").textContent = "⏸";
+  updateTtsUI();
+  const u = new SpeechSynthesisUtterance(unspace(s.lines[i]));
+  tts.u = u;
+  const v = currentVoice();
+  if (v) u.voice = v;
+  u.lang = "th-TH";
+  u.rate = curRate();
+  u.onend = () => {
+    if (u !== tts.u || !tts.playing) return;
+    if (i + 1 < s.lines.length) speakFrom(i + 1);
+    else ttsStop(true);
+  };
+  u.onerror = () => { if (u === tts.u && tts.playing) ttsStop(false); };
+  SS.speak(u);
+}
+function ttsStop(reset) {
+  tts.playing = false; tts.u = null;
+  if (SS) SS.cancel();
+  if (reset) { tts.line = 0; tts.started = false; }
+  $("ttsPlay").textContent = "▶";
+  updateTtsUI();
+}
+function updateTtsUI() {
+  const s = curStory();
+  $("ttsSeek").value = tts.line;
+  $("ttsPos").textContent = s ? `${tts.line + 1} / ${s.lines.length}` : "";
+  document.querySelectorAll("#storyBody p").forEach(p =>
+    p.classList.toggle("speaking", tts.started && +p.dataset.line === tts.line));
+}
+function populateVoices() {
+  const sel = $("ttsVoice");
+  const vs = thaiVoices();
+  sel.innerHTML = "";
+  for (const v of vs) {
+    const o = document.createElement("option");
+    o.value = v.voiceURI;
+    o.textContent = v.name;
+    sel.appendChild(o);
+  }
+  const want = localStorage.getItem("ttsVoice");
+  if (want && vs.some(v => v.voiceURI === want)) sel.value = want;
+  $("ttsControls").classList.toggle("hidden", !vs.length);
+  $("ttsNoVoice").classList.toggle("hidden", !!vs.length);
+}
+function setupTts(s) {
+  ttsStop(true);
+  $("ttsSeek").max = Math.max(0, s.lines.length - 1);
+  $("ttsRateBtn").textContent = curRate() + "×";
+  $("ttsBar").classList.toggle("hidden", !SS || !s.lines.length);
+  if (SS) populateVoices();
+  updateTtsUI();
+}
+$("ttsPlay").onclick = () => {
+  if (tts.playing) { tts.playing = false; tts.u = null; SS.cancel(); $("ttsPlay").textContent = "▶"; updateTtsUI(); }
+  else speakFrom(tts.line);
+};
+$("ttsSeek").oninput = e => { tts.line = +e.target.value; tts.started = true; updateTtsUI(); };
+$("ttsSeek").onchange = e => { if (tts.playing) speakFrom(+e.target.value); };
+$("ttsRateBtn").onclick = () => {
+  const r = RATES[(RATES.indexOf(curRate()) + 1) % RATES.length];
+  localStorage.setItem("ttsRate", r);
+  $("ttsRateBtn").textContent = r + "×";
+  if (tts.playing) speakFrom(tts.line);
+};
+$("ttsVoice").onchange = e => {
+  localStorage.setItem("ttsVoice", e.target.value);
+  if (tts.playing) speakFrom(tts.line);
+};
+if (SS) SS.onvoiceschanged = populateVoices; // Chrome loads voices async
 
 /* ---------- request new story ---------- */
 $("requestBtn").onclick = () => $("requestDialog").showModal();
