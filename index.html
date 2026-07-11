@@ -127,13 +127,21 @@
   #storyBody p.speaking { background: var(--accent-soft); border-radius: 6px; }
   #storyBody p { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
   #storyBody .linetext { flex: 1; min-width: 0; }
-  #storyBody .lineplay {
+  #storyBody .lineactions { display: flex; gap: .1rem; flex-shrink: 0; }
+  #storyBody .lineplay, #storyBody .linecopy {
     background: none; border: none; flex-shrink: 0;
     color: var(--muted); font-size: .8rem;
     padding: 0 .25rem; cursor: pointer; opacity: .4;
   }
-  #storyBody p:hover .lineplay, #storyBody .lineplay:focus { opacity: 1; color: var(--accent); }
+  #storyBody p:hover .lineplay, #storyBody .lineplay:focus,
+  #storyBody p:hover .linecopy, #storyBody .linecopy:focus { opacity: 1; color: var(--accent); }
   #storyBody.no-tts .lineplay { display: none; }
+  #titleRow { display: flex; align-items: center; gap: .5rem; }
+  #copyStory {
+    background: none; border: none; color: var(--muted);
+    font-size: 1.05rem; padding: 0 .25rem; cursor: pointer; opacity: .5;
+  }
+  #copyStory:hover, #copyStory:focus { opacity: 1; color: var(--accent); }
   .chip {
     display: inline-block; background: var(--chip-bg);
     border-radius: 999px; padding: .2rem .7rem; margin: 0 .35rem .45rem 0;
@@ -219,7 +227,10 @@
   <nav id="storyList"></nav>
   <main>
     <div id="storyHeader">
-      <div id="storyTitle"></div>
+      <div id="titleRow">
+        <div id="storyTitle"></div>
+        <button id="copyStory" title="Copy the whole story (unspaced)">⧉</button>
+      </div>
       <div id="storyTitleEn" class="hidden"></div>
     </div>
     <div id="ttsBar" class="hidden">
@@ -403,7 +414,9 @@ function renderStory(n) {
   $("storyBody").innerHTML = s.lines
     .map((l, i) =>
       `<p data-line="${i}"><span class="linetext">${esc(state.spaced ? l : unspace(l))}</span>` +
-      `<button class="lineplay" data-line="${i}" title="Play this line">▶</button></p>`)
+      `<span class="lineactions">` +
+      `<button class="linecopy" data-line="${i}" title="Copy this line (unspaced)">⧉</button>` +
+      `<button class="lineplay" data-line="${i}" title="Play this line">▶</button></span></p>`)
     .join("");
   renderNewWords(n);
   renderDive(s);
@@ -549,8 +562,38 @@ $("ttsVoice").onchange = e => {
 };
 if (SS) SS.onvoiceschanged = populateVoices; // Chrome loads voices async
 $("storyBody").onclick = e => {
+  const c = e.target.closest && e.target.closest("button.linecopy");
+  if (c) {
+    const s = curStory();
+    if (s) copyText(unspace(s.lines[+c.dataset.line]), c);
+    return;
+  }
   const b = e.target.closest && e.target.closest("button.lineplay");
   if (b) speakFrom(+b.dataset.line, { single: true });
+};
+
+/* ---------- copy (always unspaced) ---------- */
+async function copyText(text, btn) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    ta.remove();
+  }
+  if (btn && btn.textContent !== "✓") {
+    const old = btn.textContent;
+    btn.textContent = "✓";
+    setTimeout(() => { btn.textContent = old; }, 900);
+  }
+}
+$("copyStory").onclick = () => {
+  const s = curStory();
+  if (!s) return;
+  copyText(unspace(s.title) + "\n\n" + s.lines.map(unspace).join("\n"), $("copyStory"));
 };
 
 /* ---------- request new story ---------- */
